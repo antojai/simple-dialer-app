@@ -1,98 +1,187 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { Avatar } from '@/components/avatar';
+import { Icon } from '@/components/icon';
+import { Keypad, useKeySize } from '@/components/keypad';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { placeCall } from '@/lib/call';
+import { formatPhone } from '@/lib/phone';
+import { findContactByNumber, loadContacts, matchDialInput, useContacts } from '@/state/contacts';
+import { useRecents } from '@/state/recents';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+const MAX_LENGTH = 40;
 
-export default function HomeScreen() {
+export default function KeypadScreen() {
+  const theme = useTheme();
+  const keySize = useKeySize();
+  const [number, setNumber] = useState('');
+  const { contacts } = useContacts();
+  const recents = useRecents();
+
+  // Load contacts silently if access was already granted (no prompt here).
+  useEffect(() => {
+    loadContacts({ request: false });
+  }, []);
+
+  const matches = matchDialInput(contacts, number);
+  const exactContact = findContactByNumber(contacts, number);
+
+  const type = (key: string) => setNumber((n) => (n.length >= MAX_LENGTH ? n : n + key));
+
+  const onCall = async () => {
+    // Like most phone apps, pressing call with nothing typed recalls the last number.
+    if (!number) {
+      if (recents[0]) setNumber(recents[0].number);
+      return;
+    }
+    if (await placeCall(number, exactContact?.name)) setNumber('');
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+    <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: theme.background }]}>
+      <View style={styles.content}>
+        {/* Typed number and the contact it belongs to */}
+        <View style={styles.display}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+            style={[styles.number, { color: theme.text }]}
+            accessibilityLiveRegion="polite">
+            {formatPhone(number)}
+          </Text>
+          <ThemedText type="small" themeColor="accent" numberOfLines={1} style={styles.caption}>
+            {exactContact?.name ?? ' '}
           </ThemedText>
-        </ThemedView>
+        </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        {/* Contact suggestions (T9 name match or number match) */}
+        <View style={styles.suggestions}>
+          {number && !exactContact ? (
+            <FlatList
+              data={matches}
+              keyExtractor={(m) => `${m.contact.id}:${m.phone.id}`}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => setNumber(item.phone.number.replace(/[^\d+*#]/g, ''))}
+                  style={({ pressed }) => [
+                    styles.suggestion,
+                    pressed && { backgroundColor: theme.backgroundElement },
+                  ]}>
+                  <Avatar name={item.contact.name} seed={item.contact.id} uri={item.contact.thumbnail} size={36} />
+                  <View style={styles.suggestionText}>
+                    <ThemedText numberOfLines={1}>{item.contact.name}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                      {item.phone.label ? `${item.phone.label} · ` : ''}
+                      {item.phone.number}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              )}
+            />
+          ) : null}
+        </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <Keypad
+          onKey={type}
+          onLongKey={(key) => (key === '0' ? type('+') : type(key))}
+        />
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        {/* Call button with backspace on its right */}
+        <View style={[styles.actions, { marginTop: keySize * 0.22 }]}>
+          <View style={{ width: keySize }} />
+          <Pressable
+            onPress={onCall}
+            accessibilityRole="button"
+            accessibilityLabel="Call"
+            style={({ pressed }) => [
+              styles.callButton,
+              {
+                width: keySize,
+                height: keySize,
+                borderRadius: keySize / 2,
+                backgroundColor: theme.call,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}>
+            <Icon name="call" size={keySize * 0.4} color="#ffffff" />
+          </Pressable>
+          <View style={{ width: keySize, alignItems: 'center' }}>
+            {number ? (
+              <Pressable
+                onPress={() => setNumber((n) => n.slice(0, -1))}
+                onLongPress={() => setNumber('')}
+                hitSlop={16}
+                accessibilityRole="button"
+                accessibilityLabel="Delete"
+                accessibilityHint="Long press to clear"
+                style={({ pressed }) => [styles.backspace, pressed && { opacity: 0.5 }]}>
+                <Icon name="backspace" size={26} color={theme.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
+  content: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
+    width: '100%',
     maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingBottom: BottomTabInset + Spacing.three,
   },
-  heroSection: {
+  display: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.five,
+    alignItems: 'center',
+    minHeight: 112,
+  },
+  number: {
+    fontSize: 38,
+    fontWeight: '400',
+    letterSpacing: 1,
+    minHeight: 48,
+  },
+  caption: {
+    marginTop: Spacing.one,
+  },
+  suggestions: {
+    flex: 1,
+    marginBottom: Spacing.three,
+  },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+  },
+  suggestionText: {
+    flex: 1,
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 28,
+  },
+  callButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
   },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  backspace: {
+    padding: Spacing.two,
   },
 });

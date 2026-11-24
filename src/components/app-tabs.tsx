@@ -10,21 +10,24 @@ export default function AppTabs() {
   return (
     <NativeTabs
       backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
+      indicatorColor={colors.backgroundSelected}
+      tintColor={colors.accent}
       labelStyle={{ selected: { color: colors.text } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
+        <NativeTabs.Trigger.Label>Keypad</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="circle.grid.3x3.fill" md="dialpad" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="recents">
+        <NativeTabs.Trigger.Label>Recents</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'clock', selected: 'clock.fill' }} md="history" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="contacts">
+        <NativeTabs.Trigger.Label>Contacts</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
+          sf={{ default: 'person.2', selected: 'person.2.fill' }}
+          md="contacts"
         />
       </NativeTabs.Trigger>
     </NativeTabs>

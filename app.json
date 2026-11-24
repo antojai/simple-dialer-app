@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "simple-dialer-app",
+    "name": "Simple Dialer",
     "slug": "simple-dialer-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -31,6 +31,12 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow $(PRODUCT_NAME) to show your contacts so you can search and call them."
         }
       ]
     ],
